@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { generateAnalysis, type Framework } from "@/lib/claude";
 import {
   getCompetitorAnalysisBundle,
@@ -16,11 +15,6 @@ const VALID_FRAMEWORKS: Framework[] = [
 ];
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const body = (await req.json()) as { competitor_id?: string; framework?: string };
   const { competitor_id, framework } = body;
 

@@ -1,5 +1,4 @@
-import { auth } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   getCompetitor,
@@ -8,7 +7,6 @@ import {
   type ValueLadderRung,
 } from "@/lib/queries";
 import { TabNav } from "@/components/tab-nav";
-import { SignOutButton } from "@/components/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AdThumb } from "@/components/ad-thumb";
 import { ValueLadderList } from "@/components/value-ladder-list";
@@ -58,9 +56,6 @@ export default async function CompetitorLadderPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   const { id } = await params;
   const [competitor, topAds, analyses] = await Promise.all([
     getCompetitor(id),
@@ -96,9 +91,7 @@ export default async function CompetitorLadderPage({
           <span className="text-sm font-medium text-foreground">Value Ladder</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">{session.user?.email}</span>
           <ThemeToggle />
-          <SignOutButton />
         </div>
       </header>
 

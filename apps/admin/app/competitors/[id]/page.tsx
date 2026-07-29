@@ -1,10 +1,8 @@
-import { auth } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getCompetitor, getCompetitorHookCounts, getCompetitorTempCounts, getTopAdsForCompetitor, listAnalyses, listIntelSources } from "@/lib/queries";
 import { TabNav } from "@/components/tab-nav";
 import { OverviewTab } from "./tabs/overview";
-import { SignOutButton } from "@/components/sign-out-button";
 import { ScrapeTrigger } from "@/components/scrape-trigger";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { OrgLogo } from "@/components/org-logo";
@@ -14,9 +12,6 @@ export default async function CompetitorPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   const { id } = await params;
 
   const [competitor, hookCounts, tempCounts, topAds, analyses, intelSources] = await Promise.all([
@@ -58,11 +53,7 @@ export default async function CompetitorPage({
           </span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs" style={{ color: "var(--ink-3)" }}>
-            {session.user?.email}
-          </span>
           <ThemeToggle />
-          <SignOutButton />
         </div>
       </header>
 

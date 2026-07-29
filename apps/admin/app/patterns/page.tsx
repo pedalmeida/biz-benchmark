@@ -1,8 +1,5 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { listCompetitors, getPatternsData } from "@/lib/queries";
-import { SignOutButton } from "@/components/sign-out-button";
 import { AdThumb } from "@/components/ad-thumb";
 import type { Competitor } from "@/lib/queries";
 
@@ -157,9 +154,6 @@ const TEMP_INSIGHTS = [
 ];
 
 export default async function PatternsPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   const [competitors, patterns] = await Promise.all([
     listCompetitors(),
     getPatternsData(),
@@ -200,10 +194,6 @@ export default async function PatternsPage() {
           <span className="text-sm" style={{ color: "var(--ink)" }}>
             Patterns
           </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs" style={{ color: "var(--ink-3)" }}>{session.user?.email}</span>
-          <SignOutButton />
         </div>
       </header>
 

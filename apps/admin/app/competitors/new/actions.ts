@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { createCompetitor } from "@/lib/queries";
 
 function slugify(name: string): string {
@@ -15,9 +14,6 @@ function slugify(name: string): string {
 }
 
 export async function addCompetitorAction(formData: FormData) {
-  const session = await auth();
-  if (!session) throw new Error("Unauthorized");
-
   const name = String(formData.get("name") ?? "").trim();
   const pageHandle = String(formData.get("pageHandle") ?? "").trim() || name;
   const primarySiteUrl = String(formData.get("primary_site_url") ?? "").trim() || null;

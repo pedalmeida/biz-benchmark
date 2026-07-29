@@ -7,6 +7,7 @@ export type Competitor = {
   hq_country: string | null;
   hq_city: string | null;
   org_type: string | null;
+  business_type?: string | null;
   org_size_estimate: string | null;
   archetype: string | null;
   voice_descriptor: string | null;
@@ -424,4 +425,93 @@ export async function getCompetitorAnalysisBundle(
     funnel_steps: funnelSteps as Array<Record<string, unknown>>,
     public_mentions: publicMentions as Array<Record<string, unknown>>,
   };
+}
+
+// ============================================================
+// RUNS (a niche+country benchmark request)
+// ============================================================
+
+export type Run = {
+  id: string;
+  niche_label: string;
+  niche_key: string;
+  country: string;
+  language: string | null;
+  keywords: string[] | null;
+  discovery_method: string | null;
+  status: string;
+  cost_cents: number;
+  error: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type DiscoveryCandidate = {
+  id: number;
+  page_name: string;
+  name_key: string;
+  ad_count: number;
+  verdict: string;
+};
+
+export async function listRuns(): Promise<Run[]> {
+  const sql = getSql();
+  const rows = await sql`
+    SELECT id, niche_label, niche_key, country, language, keywords,
+           discovery_method, status, cost_cents, error,
+           created_at::text, started_at::text, finished_at::text
+    FROM runs
+    ORDER BY created_at DESC
+  `;
+  return rows as Run[];
+}
+
+export async function getRun(id: string): Promise<Run | null> {
+  const sql = getSql();
+  const rows = await sql`
+    SELECT id, niche_label, niche_key, country, language, keywords,
+           discovery_method, status, cost_cents, error,
+           created_at::text, started_at::text, finished_at::text
+    FROM runs WHERE id = ${id}
+  `;
+  return (rows[0] as Run) ?? null;
+}
+
+// Included competitors for a run, with the same computed ad stats as
+// listCompetitors() — reuses CompetitorCard as-is on the run detail page.
+export async function listRunCompetitors(runId: string): Promise<Competitor[]> {
+  const sql = getSql();
+  const rows = await sql`
+    SELECT
+      c.id, c.name, c.status, c.hq_country, c.org_type, c.business_type,
+      c.org_size_estimate, c.archetype, c.voice_descriptor, c.audience_target,
+      c.one_line_summary, c.ad_strategy, c.value_ladder, c.primary_site_url,
+      c.last_refreshed_at::text,
+      COUNT(a.id)::int                                       AS ad_count,
+      COUNT(a.id) FILTER (WHERE a.is_active = true)::int     AS active_count,
+      COUNT(a.id) FILTER (WHERE a.is_evergreen_winner = true)::int AS evergreen_count,
+      MAX(a.duration_days)::int                              AS longest_run_days
+    FROM run_competitors rc
+    JOIN competitors c ON c.id = rc.competitor_id
+    LEFT JOIN ads a ON a.competitor_id = c.id
+    WHERE rc.run_id = ${runId} AND rc.included = true
+    GROUP BY c.id, rc.rank
+    ORDER BY rc.rank NULLS LAST, c.name
+  `;
+  return rows as Competitor[];
+}
+
+// Everything the filter rejected for this run, for the audit panel —
+// see docs/ for why this table exists (a spam page must show up here
+// present-and-rejected, not silently absent).
+export async function listRejectedCandidates(runId: string): Promise<DiscoveryCandidate[]> {
+  const sql = getSql();
+  const rows = await sql`
+    SELECT id, page_name, name_key, ad_count, verdict
+    FROM discovery_candidates
+    WHERE run_id = ${runId} AND verdict != 'accepted'
+    ORDER BY ad_count DESC
+  `;
+  return rows as DiscoveryCandidate[];
 }

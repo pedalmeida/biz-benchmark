@@ -1,7 +1,4 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { SignOutButton } from "@/components/sign-out-button";
 import { addCompetitorAction } from "./actions";
 
 const ORG_TYPES = [
@@ -14,9 +11,6 @@ const ORG_TYPES = [
 ];
 
 export default async function NewCompetitorPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <header
@@ -31,12 +25,6 @@ export default async function NewCompetitorPage() {
           <span className="text-sm" style={{ color: "var(--ink)" }}>
             New
           </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs" style={{ color: "var(--ink-3)" }}>
-            {session.user?.email}
-          </span>
-          <SignOutButton />
         </div>
       </header>
 

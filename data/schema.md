@@ -127,18 +127,21 @@ Audit log. Every pipeline run creates a row. `records_added` JSONB tracks counts
 
 ---
 
-## `am_strategy_notes`
+## `runs`
 
-The coaching layer's output. After running framework analyses across competitors, the LLM generates AM-specific recommendations.
+A niche+country benchmark request — see README.md for the discovery pipeline this drives.
 
-`topic`: short slug (e.g. "tourism-trojan-horse", "evergreen-winners", "course-finder-quiz").
-`inspired_by`: array of competitor IDs that informed the recommendation.
-`status`: idea → planned → building → shipped \| rejected.
+`status`: queued → discovering → classifying → scraping → funnels → ready \| failed \| no_competitors_found.
+`niche_key`: normalized `niche_label`, used to find a cached run for the same niche+country within `RUN_CACHE_DAYS`.
 
 ---
 
-## `auth_allowlist`
+## `run_competitors`
 
-Google emails permitted to log in. Seeded with Pedro. New entries added via admin UI.
+N:N between a run and a competitor — a competitor can surface in more than one run's niche/keywords. `included = false` rows are kept for audit (ranked below the cap, not dropped).
 
-`role`: admin (full access) \| editor (CRUD) \| viewer (read-only).
+---
+
+## `discovery_candidates`
+
+The filter's full audit trail for one run — every page the keyword search surfaced, whether accepted or rejected, and why (`verdict`). This is what the admin's "Filtered out" panel reads.

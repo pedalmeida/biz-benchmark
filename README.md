@@ -15,31 +15,36 @@ Competitor-intelligence dossier system for any niche: point it at a market ("cl�
 
 ## Architecture
 
-- **Admin app** (`apps/admin/`) — Next.js + Vercel + Google OAuth, the only UI
-- **Worker** (`apps/worker/`) — small Express service on Railway; scrapes the Meta Ad Library via Firecrawl, parses results, writes to Postgres
-- **Neon Postgres** — single source of truth, schema in `data/schema.sql`
+- **Admin app** (`apps/admin/`) — Next.js + Vercel, the only UI. **No login** — anyone who can reach the URL can use it. If you deploy this anywhere beyond your own machine, put it behind something that gates access yourself (a VPN, Vercel deployment protection, a reverse proxy with basic auth).
+- **Worker** (`apps/worker/`) — Express service on Railway; runs the discovery pipeline (keyword expansion → Meta Ad Library search → spam filter → LLM relevance pass → auto-create competitors → scrape ad history → classify hooks → crawl funnels) and exposes it as `POST /run`.
+- **`packages/shared/`** — the generic hook/temperature/offer taxonomy and discovery-filter logic, used by both apps.
+- **Neon Postgres** — single source of truth, schema in `data/schema.sql`.
 
 ## Repo layout
 
 ```
 biz-benchmark/
-├── apps/admin/     # Next.js admin app (UI, auth, Claude analysis calls)
-├── apps/worker/    # Railway worker: scrapes + parses the Meta Ad Library
+├── apps/admin/       # Next.js admin app (UI, Claude analysis calls)
+├── apps/worker/      # Railway worker: discovery pipeline + Meta Ad Library scraper
+├── packages/shared/  # taxonomy + discovery-filter logic shared by both apps
 ├── data/
-│   ├── schema.sql  # Neon schema
-│   └── schema.md   # per-column reference
-├── scripts/        # download-creatives (ad image mining)
-└── skill-refs/     # vendored Brunson/Hormozi reference docs (generic marketing theory)
+│   ├── schema.sql    # Neon schema
+│   └── schema.md     # per-column reference
+├── scripts/          # download-creatives (ad image mining)
+└── skill-refs/       # vendored Brunson/Hormozi reference docs (generic marketing theory)
 ```
 
 ## Setup
 
 1. Clone this repo.
-2. Create a Neon Postgres database, run `data/schema.sql` against it — **first edit the seed email near the bottom of that file** to your own Google account email (it gates `/login`).
-3. Copy `.env.local.example` → `.env.local` in both `apps/admin/` and `apps/worker/`, fill in your own keys (Firecrawl, Anthropic, Google OAuth, a random `WORKER_SECRET` shared by both apps).
-4. `npm install` in `apps/admin/` and `apps/worker/` separately.
-5. Run the worker (`npm run dev`, Railway in prod) and the admin app (`npm run dev`, Vercel in prod).
+2. Create a Neon Postgres database, run `data/schema.sql` against it.
+3. Copy `.env.local.example` → `.env.local` in both `apps/admin/` and `apps/worker/`, fill in your own keys (Firecrawl, Anthropic, a random `WORKER_SECRET` shared by both apps).
+4. `npm install` once at the repo root — this is an npm workspace, don't install per-app.
+5. Run the worker (`npm run dev` in `apps/worker/`, Railway in prod) and the admin app (`npm run dev` in `apps/admin/`, Vercel in prod). Both need `packages/shared` built first — `npm run build` in each app handles that automatically; for local dev, run `npm run build -w @bb/shared` once after cloning.
+6. Open the admin app, go to **Runs → New benchmark**, type a niche and country.
 
 ## Status
 
-Forked from a working single-client tool. What's proven: Meta Ad Library keyword-search discovery works (validated against a Portuguese dental-clinic niche pilot — real competitors surface, with a spam/irrelevant-page filter needed on top). What's in progress: automatic competitor discovery + generic (non-hardcoded-vertical) taxonomy and prompts, so the tool works for any niche out of the box. See `docs/` for the design doc once it lands.
+Forked from a working single-client tool (manual competitor entry only). The fork replaces that with automatic per-niche discovery — validated live end-to-end against a real Neon database and a Portuguese dental-clinic pilot: keyword expansion → Ad Library search → spam/off-niche filtering → auto-created competitors → ad scraping → hook classification → funnel crawl, with real cost caps that abort a run before it runs away. The admin UI (`/runs`, `/runs/new`, `/runs/[id]`) exposes this end to end.
+
+Not yet built: a public self-serve form (today someone has to open the admin and start a run themselves) and Graph API-based discovery (Meta's official Ad Library API, as an alternative to the Firecrawl-keyword-search branch this ships with — more coverage, no page-1-only sampling limit, but needs your own Meta app token).

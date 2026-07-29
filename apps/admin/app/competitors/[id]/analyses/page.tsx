@@ -1,10 +1,8 @@
-import { auth } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { marked } from "marked";
 import { getCompetitor, listAnalyses } from "@/lib/queries";
 import { TabNav } from "@/components/tab-nav";
-import { SignOutButton } from "@/components/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AnalysisGenerator } from "@/components/analysis-generator";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -23,9 +21,6 @@ export default async function CompetitorAnalysesPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   const { id } = await params;
   const [competitor, analyses] = await Promise.all([
     getCompetitor(id),
@@ -62,11 +57,7 @@ export default async function CompetitorAnalysesPage({
           <span className="text-sm font-medium text-foreground">Analyses</span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {session.user?.email}
-          </span>
           <ThemeToggle />
-          <SignOutButton />
         </div>
       </header>
 

@@ -1,15 +1,9 @@
-import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { listCompetitors, listIntelSourcesByCompetitors } from "@/lib/queries";
 import { CompetitorCard } from "@/components/competitor-card";
-import { SignOutButton } from "@/components/sign-out-button";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   const competitors = await listCompetitors();
   const intelByCompetitor = await listIntelSourcesByCompetitors(
     competitors.map((c) => c.id),
@@ -23,9 +17,16 @@ export default async function DashboardPage() {
       >
         <div className="flex items-center gap-6">
           <span className="font-semibold text-sm" style={{ color: "var(--ink)" }}>
-            AM Benchmark
+            biz-benchmark
           </span>
           <nav className="flex items-center gap-4">
+            <Link
+              href="/runs"
+              className="text-xs font-medium transition-colors hover:text-white"
+              style={{ color: "var(--ink-3)" }}
+            >
+              Runs
+            </Link>
             <Link
               href="/dashboard"
               className="text-xs font-medium"
@@ -43,11 +44,7 @@ export default async function DashboardPage() {
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-xs" style={{ color: "var(--ink-3)" }}>
-            {session.user?.email}
-          </span>
           <ThemeToggle />
-          <SignOutButton />
         </div>
       </header>
 

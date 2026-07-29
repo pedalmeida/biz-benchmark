@@ -1,19 +1,14 @@
-import { auth } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getCompetitor, listAds } from "@/lib/queries";
 import { TabNav } from "@/components/tab-nav";
 import { AdsTable } from "@/components/ads-table";
-import { SignOutButton } from "@/components/sign-out-button";
 
 export default async function AdsPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await auth();
-  if (!session) redirect("/login");
-
   const { id } = await params;
   const [competitor, ads] = await Promise.all([
     getCompetitor(id),
@@ -47,12 +42,6 @@ export default async function AdsPage({
           <span className="text-sm" style={{ color: "var(--ink)" }}>
             Ads
           </span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs" style={{ color: "var(--ink-3)" }}>
-            {session.user?.email}
-          </span>
-          <SignOutButton />
         </div>
       </header>
 

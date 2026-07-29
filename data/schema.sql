@@ -345,20 +345,3 @@ CREATE TABLE IF NOT EXISTS scrape_jobs (
 CREATE INDEX IF NOT EXISTS scrape_jobs_competitor ON scrape_jobs(competitor_id);
 CREATE INDEX IF NOT EXISTS scrape_jobs_run        ON scrape_jobs(run_id);
 CREATE INDEX IF NOT EXISTS scrape_jobs_status     ON scrape_jobs(status);
-
--- =============================================================
--- AUTH_ALLOWLIST (Google OAuth allowlist for the admin app)
--- =============================================================
-CREATE TABLE IF NOT EXISTS auth_allowlist (
-  id         SERIAL PRIMARY KEY,
-  email      TEXT UNIQUE NOT NULL,
-  role       TEXT DEFAULT 'viewer',                    -- admin | editor | viewer
-  added_at   TIMESTAMPTZ DEFAULT NOW(),
-  added_by   TEXT
-);
-
--- Seed the first admin. Replace the placeholder with your own Google account
--- email before running this schema — this is what gates access to /login.
-INSERT INTO auth_allowlist (email, role, added_by)
-VALUES ('your-email@example.com', 'admin', 'seed')
-ON CONFLICT (email) DO NOTHING;
