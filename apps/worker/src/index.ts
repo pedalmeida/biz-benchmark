@@ -1,6 +1,15 @@
 import express from "express";
-import { createScrapeJob, updateScrapeJob } from "./queries.js";
+import {
+  createScrapeJob,
+  updateScrapeJob,
+  findCachedRun,
+  createRun,
+  updateRun,
+  makeRunId,
+  normalizeNicheKey,
+} from "./queries.js";
 import { scrapeAdLibrary } from "./scrape.js";
+import { runDiscoveryPipeline } from "./run.js";
 
 const app = express();
 app.use(express.json());
@@ -56,6 +65,41 @@ app.post("/scrape", async (req, res) => {
       meta_ad_library: String(err),
     }).catch(() => {});
   }
+});
+
+app.post("/run", async (req, res) => {
+  if (req.headers["x-worker-secret"] !== WORKER_SECRET) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  const { nicheLabel, country } = req.body as { nicheLabel?: string; country?: string };
+  if (!nicheLabel || !country) {
+    res.status(400).json({ error: "nicheLabel and country are required" });
+    return;
+  }
+
+  const nicheKey = normalizeNicheKey(nicheLabel);
+  const cacheDays = parseInt(process.env.RUN_CACHE_DAYS ?? "14", 10);
+  const cached = await findCachedRun(nicheKey, country, cacheDays);
+  if (cached) {
+    res.json({ ok: true, runId: cached.id, cached: true });
+    return;
+  }
+
+  const runId = makeRunId(nicheLabel, country);
+  await createRun(runId, nicheLabel, nicheKey, country);
+
+  // Respond immediately, same fire-and-forget pattern as /scrape — the
+  // caller polls run status instead of waiting on this request.
+  res.json({ ok: true, runId, cached: false });
+
+  runDiscoveryPipeline(runId, nicheLabel, country).catch(async (err) => {
+    console.error(`run ${runId} failed:`, err);
+    await updateRun(runId, { status: "failed", error: String(err), finished: true }).catch(
+      () => {}
+    );
+  });
 });
 
 const port = parseInt(process.env.PORT ?? "3002", 10);
