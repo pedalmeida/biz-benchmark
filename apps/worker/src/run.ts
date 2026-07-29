@@ -2,6 +2,7 @@ import { estimateCostCents } from "@radar/shared";
 import { expandKeywords } from "./pipeline/keyword-expansion.js";
 import {
   discoverCandidatesFirecrawl,
+  describeDiscoveryFailure,
   judgeCandidates,
   rankAndCap,
   type RankedCandidate,
@@ -95,6 +96,20 @@ export async function runDiscoveryPipeline(
   await cost.checkpoint();
   if (keywordErrors.length > 0) {
     console.error(`run ${runId}: ${keywordErrors.length} keyword(s) failed`, keywordErrors);
+  }
+
+  // Total provider failure must surface as a failed run. Without this, every
+  // keyword erroring leaves `candidates` empty and the run falls through to
+  // the no_competitors_found branch below — an outage reported as a market
+  // conclusion. Partial failures still continue: a sample is still a sample.
+  const discoveryFailure = describeDiscoveryFailure(keywords, keywordErrors);
+  if (discoveryFailure) {
+    await updateRun(runId, {
+      status: "failed",
+      error: discoveryFailure,
+      finished: true,
+    });
+    return;
   }
 
   // 3d: deterministic filter — write the FULL audit trail now, spam and all

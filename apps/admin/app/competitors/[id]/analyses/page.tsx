@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { marked } from "marked";
 import { getCompetitor, listAnalyses } from "@/lib/queries";
+import { renderMarkdown } from "@/lib/markdown";
 import { TabNav } from "@/components/tab-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AnalysisGenerator } from "@/components/analysis-generator";
@@ -140,10 +140,13 @@ export default async function CompetitorAnalysesPage({
                   </CardHeader>
                   <CardContent>
                     <Separator className="mb-4" />
+                    {/* renderMarkdown sanitizes before this hits the DOM —
+                        the Markdown is LLM-written from scraped pages, so it
+                        is untrusted input. Never swap it back for marked. */}
                     <div
                       className="analysis-markdown"
                       dangerouslySetInnerHTML={{
-                        __html: marked.parse(a.markdown ?? "") as string,
+                        __html: renderMarkdown(a.markdown),
                       }}
                     />
                   </CardContent>

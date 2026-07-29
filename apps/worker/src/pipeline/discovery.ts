@@ -69,6 +69,25 @@ export async function discoverCandidatesFirecrawl(
   return { candidates: Array.from(byKey.values()), totalAdsSeen, keywordErrors };
 }
 
+// A run with zero survivors normally means "this niche has no advertisers we
+// could accept" — a real market finding. But an empty candidate list also
+// comes out of a total provider outage (every Firecrawl call failing), and
+// those two must never look the same: one is a conclusion, the other is a
+// broken run. Returns a user-facing failure message when discovery never
+// actually observed the market, or null when the results can be trusted.
+export function describeDiscoveryFailure(
+  keywords: string[],
+  keywordErrors: { keyword: string; error: string }[]
+): string | null {
+  if (keywords.length === 0) {
+    return "Discovery failed: keyword expansion returned no keywords, so the Ad Library was never searched. Check the Anthropic API key and retry.";
+  }
+  if (keywordErrors.length < keywords.length) return null;
+
+  const firstError = keywordErrors[0]?.error ?? "unknown error";
+  return `Discovery failed: all ${keywords.length} Ad Library searches failed, so no competitor data was collected. This is a provider or network failure, not an empty market. First error: ${firstError}. Check the Firecrawl API key and retry.`;
+}
+
 export type RankedCandidate = DiscoveryCandidate & {
   isRelevant: boolean;
   relevanceScore: number;

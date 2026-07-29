@@ -9,5 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests run through tsx (npm test), they never belong in the deployed build.
+  "exclude": ["src/**/*.test.ts"]
 }

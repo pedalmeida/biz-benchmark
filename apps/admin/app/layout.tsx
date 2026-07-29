@@ -3,6 +3,7 @@ import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "@/components/theme-provider";
+import { LocalOnlyBanner } from "@/components/local-only-banner";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -29,6 +30,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <LocalOnlyBanner />
           {children}
         </ThemeProvider>
       </body>

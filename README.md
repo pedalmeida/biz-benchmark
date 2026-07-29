@@ -47,6 +47,14 @@ radar-da-concorrencia/
 
 Forked from a working single-client tool (manual competitor entry only). The fork replaces that with automatic per-niche discovery — validated live end-to-end against a real Neon database across three PT niches (dental clinics, pilates studios, real estate agencies): keyword expansion → Ad Library search → spam/off-niche filtering → auto-created competitors → ad scraping → hook classification → funnel crawl → value-ladder/positioning synthesis, with real cost caps that abort a run before it runs away. The admin UI (`/runs`, `/runs/new`, `/runs/[id]`) exposes this end to end.
 
-An independent readiness review (`docs/lead-magnet-readiness-report.md`) found real gaps before this is safe for a broad, non-technical giveaway — most importantly, generated Markdown is rendered without sanitization (a stored-XSS risk from scraped content) and a total provider outage can currently read as a legitimate "no competitors found" instead of a failure. See that doc for the full list before distributing this widely.
+An independent readiness review (`docs/lead-magnet-readiness-report.md`) found real gaps before this is safe for a broad, non-technical giveaway. The three release blockers it flagged are fixed:
+
+- **Generated Markdown is sanitized** before rendering (`apps/admin/lib/markdown.ts`). Analyses are LLM-written from scraped competitor sites, so their content is untrusted; scripts, event handlers, `javascript:` URLs, iframes and inline styles are stripped. Regression tests in `apps/admin/lib/markdown.test.ts`.
+- **A total provider outage now fails the run.** If every Ad Library keyword search errors, the run ends as `failed` with an explanation instead of `no_competitors_found` — an outage can no longer read as a market conclusion. Regression tests in `apps/worker/src/pipeline/discovery.test.ts`.
+- **The no-login trade-off is stated in the UI**, not just here: every admin page shows a banner saying there is no authentication and the app is for local use only.
+
+Run both test suites from the repo root with `npm test`.
+
+The remaining items in that report are still open (one-command `dev`/`doctor` startup, a Portuguese `START-HERE.md`, unique run IDs so a same-day retry doesn't collide, plain-language error messages, and the Next.js patch + lint repair). Read it before distributing this widely.
 
 Not yet built: a public self-serve form (today someone has to open the admin and start a run themselves) and Graph API-based discovery (Meta's official Ad Library API, as an alternative to the Firecrawl-keyword-search branch this ships with — more coverage, no page-1-only sampling limit, but needs your own Meta app token).

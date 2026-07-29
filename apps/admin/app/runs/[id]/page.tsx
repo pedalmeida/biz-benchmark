@@ -69,9 +69,11 @@ export default async function RunDetailPage({
 
         {competitors.length === 0 ? (
           <p className="text-sm mb-8" style={{ color: "var(--ink-3)" }}>
-            {run.status === "ready" || run.status === "no_competitors_found"
-              ? "No competitors survived the filter for this niche/country."
-              : "Still discovering — competitors will appear here as they're found."}
+            {run.status === "failed"
+              ? "This run failed before it could collect competitors — see the error above. Nothing here is a finding about this market."
+              : run.status === "ready" || run.status === "no_competitors_found"
+                ? "No competitors survived the filter for this niche/country."
+                : "Still discovering — competitors will appear here as they're found."}
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
