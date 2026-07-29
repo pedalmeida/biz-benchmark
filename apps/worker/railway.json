@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.railway.app/railway-service-config.json",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "npm run build && npm start",
+    "healthcheckPath": "/health",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "am-benchmark-scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "tsx seed-from-markdown.ts",
+    "seed:dry": "tsx seed-from-markdown.ts --dry-run",
+    "download": "tsx download-creatives.ts",
+    "export": "tsx export-public.ts",
+    "verify": "tsx verify-seed.ts"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}
