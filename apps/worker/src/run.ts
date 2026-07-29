@@ -6,6 +6,7 @@ import {
   type RankedCandidate,
 } from "./pipeline/discovery.js";
 import { judgeRelevance } from "./pipeline/relevance.js";
+import { classifyAds } from "./pipeline/classify.js";
 import { scrapeAdLibrary } from "./scrape.js";
 import {
   updateRun,
@@ -142,7 +143,7 @@ export async function runDiscoveryPipeline(
 
   // 3f cont'd: auto-create a competitor per included candidate
   await updateRun(runId, { status: "scraping" });
-  const competitorIds: { id: string; pageName: string }[] = [];
+  const competitorIds: { id: string; pageName: string; pageSlug: string | null }[] = [];
   for (const c of included) {
     const id = await upsertAutoCompetitor({
       id: slugifyCompetitorId(c.pageName),
@@ -152,7 +153,7 @@ export async function runDiscoveryPipeline(
       businessType: c.businessType,
       hqCountry: country,
     });
-    competitorIds.push({ id, pageName: c.pageName });
+    competitorIds.push({ id, pageName: c.pageName, pageSlug: c.pageSlug });
   }
 
   await insertRunCompetitors(
@@ -169,10 +170,29 @@ export async function runDiscoveryPipeline(
 
   // 3g: deep scrape each included competitor — the existing per-competitor
   // path, unchanged, just called once per discovered business instead of
-  // once per manually-typed name.
-  for (const { id, pageName } of competitorIds) {
-    await scrapeAdLibrary({ competitorId: id, pageHandle: pageName, country });
+  // once per manually-typed name. expectedPageSlug filters out unrelated
+  // advertisers the keyword search also matched (see scrape.ts).
+  for (const { id, pageName, pageSlug } of competitorIds) {
+    const result = await scrapeAdLibrary({
+      competitorId: id,
+      pageHandle: pageName,
+      country,
+      expectedPageSlug: pageSlug,
+    });
+    if (result.skippedOtherAdvertisers) {
+      console.warn(
+        `run ${runId}: ${id} — skipped ${result.skippedOtherAdvertisers} ad(s) from other advertisers`
+      );
+    }
     await new Promise((r) => setTimeout(r, 2000));
+  }
+
+  // 5b: classify hook_angle/traffic_temperature for the ads just scraped —
+  // otherwise every run-discovered ad lands with both NULL, same gap the
+  // original manual-add pipeline had.
+  await updateRun(runId, { status: "classifying" });
+  for (const { id } of competitorIds) {
+    await classifyAds(id);
   }
 
   await updateRun(runId, { status: "ready", finished: true });
