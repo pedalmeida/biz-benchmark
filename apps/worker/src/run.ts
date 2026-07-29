@@ -7,6 +7,7 @@ import {
 } from "./pipeline/discovery.js";
 import { judgeRelevance } from "./pipeline/relevance.js";
 import { classifyAds } from "./pipeline/classify.js";
+import { crawlFunnel } from "./pipeline/funnel-crawl.js";
 import { scrapeAdLibrary } from "./scrape.js";
 import {
   updateRun,
@@ -193,6 +194,14 @@ export async function runDiscoveryPipeline(
   await updateRun(runId, { status: "classifying" });
   for (const { id } of competitorIds) {
     await classifyAds(id);
+  }
+
+  // 6: crawl the top landing page(s) per competitor into funnel_steps/
+  // offers/lead_magnets — the page most ads point to is the money page.
+  const maxFunnelPages = parseInt(process.env.MAX_FUNNEL_PAGES_PER_COMPETITOR ?? "3", 10);
+  await updateRun(runId, { status: "funnels" });
+  for (const { id } of competitorIds) {
+    await crawlFunnel(id, maxFunnelPages);
   }
 
   await updateRun(runId, { status: "ready", finished: true });

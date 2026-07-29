@@ -131,17 +131,43 @@ export function parseAdLibraryMarkdown(text: string): ParsedAd[] {
     const hashtags = [...body.matchAll(/#([A-Za-zÀ-ÿ_][A-Za-zÀ-ÿ0-9_]+)/g)].map((m) => m[1]);
 
     // --- CTA + landing_url ---
+    // Three failure modes found via live testing, all fixed below:
+    // 1. A broken/unrenderable video ad shows Meta's own placeholder
+    //    ("Sorry, we're having trouble playing this video") with a
+    //    "Learn more" link to facebook.com/help/... — that matched the CTA
+    //    whitelist and was stored as if it were the advertiser's landing
+    //    page. No genuine business CTA is a facebook.com URL, so excluding
+    //    that host outright removes this false positive.
+    // 2. Meta commonly wraps the WHOLE creative — image, caption, and CTA
+    //    label — in one link: `[![](image)\n\ncaption\n\nLearn more](url)`.
+    //    A naive `[^\]]*` "text" match stops at the FIRST `]`, which is the
+    //    image's own empty-alt-text `![]`, so it grabbed the image URL
+    //    instead of ever reaching the real destination after "Learn more".
+    //    `[\s\S]*?` (dot-all, non-greedy) ignores nested brackets and
+    //    matches through to the real closing `](url)`.
+    // 3. When no whitelisted CTA label matches at all, the old fallback
+    //    grabbed the FIRST parenthesized URL in the whole chunk (the
+    //    creative image or the advertiser's own page link). A negative
+    //    lookbehind excludes any `[` immediately preceded by `!` (a bare,
+    //    unlinked image), and the facebook.com exclusion still applies.
     let cta: string | null = null;
     let landing_url: string | null = null;
-    const ctaMatch = chunk.match(
-      /\[(Saber mais|Learn More|Sign Up|Registar|See details|Buy tickets|Doar agora|Donate now|Reservar agora)\]\((https?:\/\/[^)]+)\)/i
+    const searchRegion = sponsoredIdx >= 0 ? chunk.slice(sponsoredIdx) : chunk;
+    const notFacebook = "(?![^)]*?(?:(?:www\\.|m\\.)?facebook\\.com|fb\\.(?:com|me)\\b|fbcdn\\.net))";
+    const ctaLabels =
+      "Saber mais|Learn More|Sign Up|Registar|See details|Buy tickets|Doar agora|Donate now|Reservar agora";
+
+    const ctaMatch = searchRegion.match(
+      new RegExp(`(?<!!)\\[[\\s\\S]*?(${ctaLabels})\\]\\((https?://${notFacebook}[^)]+)\\)`, "i")
     );
     if (ctaMatch) {
       cta = ctaMatch[1];
       landing_url = ctaMatch[2];
     } else {
-      const urlMatch = chunk.match(/\(http[^)]+\)/);
-      if (urlMatch) landing_url = urlMatch[0].slice(1, -1);
+      const linkMatch = searchRegion.match(
+        new RegExp(`(?<!!)\\[[\\s\\S]*?\\]\\((https?://${notFacebook}[^)]+)\\)`, "i")
+      );
+      if (linkMatch) landing_url = linkMatch[1];
     }
 
     // --- Creative type ---
