@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { HOOK_ANGLES, TRAFFIC_TEMPERATURES, isValidTaxonomyValue } from "@bb/shared";
+import { HOOK_ANGLES, TRAFFIC_TEMPERATURES, isValidTaxonomyValue } from "@radar/shared";
 import { getSql } from "../db.js";
 
 // Same tier as the relevance pass — classifying a hook's angle is a real

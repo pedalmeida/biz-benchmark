@@ -1,6 +1,6 @@
 import { Firecrawl } from "firecrawl";
 import Anthropic from "@anthropic-ai/sdk";
-import { FUNNEL_ROLES, OFFER_CATEGORIES, MAGNET_TYPES, isValidTaxonomyValue } from "@bb/shared";
+import { FUNNEL_ROLES, OFFER_CATEGORIES, MAGNET_TYPES, isValidTaxonomyValue } from "@radar/shared";
 import { getSql } from "../db.js";
 
 const MODEL = "claude-sonnet-4-6";

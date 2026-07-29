@@ -1,4 +1,4 @@
-import { EVERGREEN_MIN_DAYS } from "@bb/shared";
+import { EVERGREEN_MIN_DAYS } from "@radar/shared";
 import { getSql } from "./db.js";
 import type { ParsedAd } from "./pipeline/parse-ad-library-md.js";
 

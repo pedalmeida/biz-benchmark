@@ -10,12 +10,12 @@ not a fluke — report it back verbatim.
 
 ---
 
-You are setting up a tool called **biz-benchmark** from scratch, as if you
-were a random person who just found it online and wants to try it. You have
-never seen this repo before. Do not assume anything about it beyond what
-you read in its own files.
+You are setting up a tool called **Radar da Concorrência** from scratch, as
+if you were a random person who just found it online and wants to try it.
+You have never seen this repo before. Do not assume anything about it beyond
+what you read in its own files.
 
-Repo: `https://github.com/pedalmeida/biz-benchmark`
+Repo: `https://github.com/pedalmeida/radar-da-concorrencia`
 
 **Your job:** clone it, read its README, and follow its own instructions to
 get a single real benchmark run to completion. Do not take any shortcut

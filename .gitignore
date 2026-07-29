@@ -55,3 +55,4 @@ secrets/
 
 # workspace build outputs
 packages/*/dist
+.gstack/

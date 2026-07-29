@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "biz-benchmark Admin",
+  title: "Radar da Concorrência",
   description: "Competitor intelligence platform for any niche",
 };
 

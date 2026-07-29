@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HOOK_ANGLES, AD_STRATEGIES } from "@bb/shared";
+import { HOOK_ANGLES, AD_STRATEGIES } from "@radar/shared";
 import { listCompetitors, getPatternsData } from "@/lib/queries";
 import { AdThumb } from "@/components/ad-thumb";
 

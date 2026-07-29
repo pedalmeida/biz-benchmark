@@ -1,4 +1,4 @@
-import { normalizeNameKey } from "@bb/shared";
+import { normalizeNameKey } from "@radar/shared";
 import { fetchAdLibraryMarkdown } from "./pipeline/fetch-ad-library.js";
 import { upsertAds } from "./queries.js";
 

@@ -17,7 +17,7 @@ export default async function DashboardPage() {
       >
         <div className="flex items-center gap-6">
           <span className="font-semibold text-sm" style={{ color: "var(--ink)" }}>
-            biz-benchmark
+            Radar da Concorrência
           </span>
           <nav className="flex items-center gap-4">
             <Link

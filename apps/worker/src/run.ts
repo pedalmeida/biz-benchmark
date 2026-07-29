@@ -1,4 +1,4 @@
-import { estimateCostCents } from "@bb/shared";
+import { estimateCostCents } from "@radar/shared";
 import { expandKeywords } from "./pipeline/keyword-expansion.js";
 import {
   discoverCandidatesFirecrawl,

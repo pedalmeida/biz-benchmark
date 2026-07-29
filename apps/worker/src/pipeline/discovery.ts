@@ -1,4 +1,4 @@
-import { normalizeNameKey, judgeCandidate, type Verdict } from "@bb/shared";
+import { normalizeNameKey, judgeCandidate, type Verdict } from "@radar/shared";
 import { fetchAdLibraryMarkdown } from "./fetch-ad-library.js";
 
 export type DiscoveryCandidate = {
@@ -99,7 +99,7 @@ export function rankAndCap(
   ];
 }
 
-// Applies the deterministic filter rules from @bb/shared to every raw
+// Applies the deterministic filter rules from @radar/shared to every raw
 // candidate. Mutates nothing — returns a new array with `verdict` set.
 // The Firecrawl branch has no currency signal, so `expectedCurrency` is
 // always null here (the currency rule becomes a no-op on this branch).
