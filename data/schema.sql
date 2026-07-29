@@ -1,10 +1,16 @@
 -- =============================================================
--- AM Competitor Intelligence Platform — Schema v1
--- Reference: /Users/pedroalmeida/.claude/plans/let-s-go-on-with-hashed-nest.md
+-- biz-benchmark Schema v2
 -- =============================================================
 -- This schema is dossier-oriented. One competitor has many intel
 -- streams: ads, funnel steps, lead magnets, offers, public mentions,
 -- dossier sections, framework analyses, and audit logs.
+--
+-- v2 adds `runs`: a niche+country benchmark request is a first-class
+-- entity, so competitor discovery can be automatic instead of added by
+-- hand. Competitors themselves stay global (not scoped per run) — the
+-- same business can surface in more than one niche/keyword search, and
+-- duplicating it per run would double scraping cost and split its ad
+-- history. Run isolation happens at read time via `run_competitors`.
 -- =============================================================
 
 -- =============================================================
@@ -23,8 +29,14 @@ CREATE TABLE IF NOT EXISTS competitors (
   founder_alive               BOOLEAN,
   hq_country                  TEXT,
   hq_city                     TEXT,
-  org_type                    TEXT,                     -- tibetan-buddhist | hindu-devotional | yogic-science | classical-yoga | breath-wellness | unknown
+  org_type                    TEXT,                     -- deprecated, superseded by business_type below — kept unused to avoid a destructive column drop
   org_size_estimate           TEXT,                     -- single-center | regional | national | global | mega-global
+
+  -- v2: discovery + genericization
+  meta_page_id                TEXT UNIQUE,              -- stable Meta page ID, when the discovery adapter provides one (Graph API branch)
+  meta_page_slug              TEXT,                     -- facebook.com/<slug> — the dedupe key on the Firecrawl-keyword-search branch
+  business_type               TEXT,                     -- free text, LLM-filled (e.g. "dental clinic") — replaces the closed org_type vocabulary
+  source                      TEXT DEFAULT 'manual',    -- manual | auto — auto = created by a run's discovery pipeline
 
   -- Positioning (LLM-populated, editable)
   archetype                   TEXT,                     -- sage | reluctant-hero | adventurer | avatar | warrior
@@ -65,6 +77,62 @@ CREATE TABLE IF NOT EXISTS intel_sources (
 CREATE INDEX IF NOT EXISTS intel_sources_competitor ON intel_sources(competitor_id);
 
 -- =============================================================
+-- RUNS (a niche+country benchmark request — v2's core new entity)
+-- =============================================================
+CREATE TABLE IF NOT EXISTS runs (
+  id                TEXT PRIMARY KEY,          -- e.g. "clinicas-dentarias-pt-20260729"
+  niche_label       TEXT NOT NULL,              -- verbatim user input, e.g. "clínicas dentárias"
+  niche_key         TEXT NOT NULL,              -- normalized (lowercase, no diacritics) — cache lookup key
+  country           TEXT NOT NULL,              -- ISO-2, e.g. "PT"
+  language          TEXT,                       -- detected during keyword expansion, e.g. "pt"
+  keywords          TEXT[],                     -- expanded search terms actually used for discovery
+  discovery_method  TEXT,                       -- graph_ads_archive | firecrawl_keyword
+  status            TEXT DEFAULT 'queued',      -- queued|discovering|scraping|classifying|funnels|ready|failed|no_competitors_found
+  requester_email   TEXT,                       -- Phase 2 hook: who asked for this run
+  requester_ip_hash TEXT,                       -- Phase 2 hook: rate limiting
+  requester_context JSONB,                      -- Phase 2 hook: {business_name, what_they_sell, budget_band, goal} — feeds challenger-recommendation
+  cost_cents        INTEGER DEFAULT 0,
+  error             TEXT,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  started_at        TIMESTAMPTZ,
+  finished_at       TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS runs_cache ON runs(niche_key, country, finished_at DESC) WHERE status = 'ready';
+
+-- =============================================================
+-- RUN_COMPETITORS (many-to-many: a competitor can surface in >1 run)
+-- =============================================================
+CREATE TABLE IF NOT EXISTS run_competitors (
+  run_id           TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  competitor_id    TEXT NOT NULL REFERENCES competitors(id) ON DELETE CASCADE,
+  discovered_via   TEXT,                                  -- which keyword surfaced it
+  relevance_score  NUMERIC,                                -- 0..1, from the LLM relevance pass
+  relevance_reason TEXT,
+  included         BOOLEAN DEFAULT TRUE,                  -- false = filtered as spam/off-niche, kept for audit
+  rank             INTEGER,
+  PRIMARY KEY (run_id, competitor_id)
+);
+
+-- =============================================================
+-- DISCOVERY_CANDIDATES (raw pre-dedupe evidence — the filter's audit trail)
+-- =============================================================
+CREATE TABLE IF NOT EXISTS discovery_candidates (
+  id            SERIAL PRIMARY KEY,
+  run_id        TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
+  page_id       TEXT,                                     -- null on the Firecrawl branch
+  page_slug     TEXT,                                     -- from the parser's advertiser_page_slug
+  page_name     TEXT NOT NULL,
+  name_key      TEXT NOT NULL,                             -- normalized dedupe key (lowercase, no diacritics, no legal/location suffixes)
+  ad_count      INTEGER,
+  currencies    TEXT[],
+  sample_bodies TEXT[],
+  verdict       TEXT,                                      -- accepted | rejected_gibberish | rejected_currency | rejected_empty | rejected_llm | rejected_rank
+  raw           JSONB,
+  UNIQUE (run_id, name_key)
+);
+
+-- =============================================================
 -- ADS (one row per Meta ad, extensible to other platforms)
 -- =============================================================
 CREATE TABLE IF NOT EXISTS ads (
@@ -74,6 +142,7 @@ CREATE TABLE IF NOT EXISTS ads (
   library_id          TEXT NOT NULL,
   country             TEXT NOT NULL,
   advertiser_page     TEXT,
+  advertiser_page_slug TEXT,                            -- facebook.com/<slug> — stable dedupe key, display name is not
   started_at          DATE,
   ended_at            DATE,
   is_active           BOOLEAN,
@@ -83,8 +152,8 @@ CREATE TABLE IF NOT EXISTS ads (
   duration_days       INTEGER,
   creative_variants   INTEGER DEFAULT 1,
   is_evergreen_winner BOOLEAN DEFAULT FALSE,
-  hook_angle          TEXT,                             -- tourism | curiosity | identity | authority-quote | religious-curiosity | emotional | direct | quiz
-  traffic_temperature TEXT,                             -- cold | warm | hot | believer
+  hook_angle          TEXT,                             -- see packages/shared/src/taxonomy.ts HOOK_ANGLES — generic, niche-agnostic vocabulary
+  traffic_temperature TEXT,                             -- cold | warm | hot
   headline            TEXT,
   body                TEXT,
   hashtags            TEXT[],
@@ -171,7 +240,7 @@ CREATE TABLE IF NOT EXISTS offers (
   competitor_id         TEXT NOT NULL REFERENCES competitors(id) ON DELETE CASCADE,
   name                  TEXT,
   url                   TEXT,
-  category              TEXT,                           -- intro | flagship | retreat | ttc | continuity | advanced
+  category              TEXT,                           -- see packages/shared/src/taxonomy.ts OFFER_CATEGORIES — generic vocabulary
   price_anchor          NUMERIC,
   price_actual          NUMERIC,
   currency              TEXT DEFAULT 'USD',
@@ -236,17 +305,23 @@ CREATE TABLE IF NOT EXISTS dossier_sections (
 -- =============================================================
 CREATE TABLE IF NOT EXISTS analyses (
   id            SERIAL PRIMARY KEY,
-  competitor_id TEXT NOT NULL REFERENCES competitors(id) ON DELETE CASCADE,
+  -- Nullable: a run-level cross-competitor synthesis (replacing the old
+  -- hardcoded GAPS/TEMP_INSIGHTS arrays in app/patterns/page.tsx) has no
+  -- single competitor — it belongs to the run instead.
+  competitor_id TEXT REFERENCES competitors(id) ON DELETE CASCADE,
+  run_id        TEXT REFERENCES runs(id) ON DELETE CASCADE,
   framework     TEXT NOT NULL,                          -- brunson-funnel | hormozi-grand-slam | hormozi-value-equation | dream-100 | mckinsey-pyramid | challenger-recommendation
-  scope         TEXT,                                   -- whole-org | specific-funnel | specific-offer
+  scope         TEXT,                                   -- whole-org | specific-funnel | specific-offer | cross-competitor
   scope_ref     TEXT,
   markdown      TEXT,
   scores        JSONB,
   generated_by  TEXT,
-  generated_at  TIMESTAMPTZ DEFAULT NOW()
+  generated_at  TIMESTAMPTZ DEFAULT NOW(),
+  CHECK (competitor_id IS NOT NULL OR run_id IS NOT NULL)
 );
 
 CREATE INDEX IF NOT EXISTS analyses_competitor_framework ON analyses(competitor_id, framework);
+CREATE INDEX IF NOT EXISTS analyses_run ON analyses(run_id);
 
 -- =============================================================
 -- SCRAPE_JOBS (audit log for the pipeline)
@@ -254,17 +329,21 @@ CREATE INDEX IF NOT EXISTS analyses_competitor_framework ON analyses(competitor_
 CREATE TABLE IF NOT EXISTS scrape_jobs (
   id             SERIAL PRIMARY KEY,
   competitor_id  TEXT REFERENCES competitors(id) ON DELETE SET NULL,
-  trigger        TEXT,                                  -- add-competitor | weekly-cron | manual-refresh
+  run_id         TEXT REFERENCES runs(id) ON DELETE SET NULL,
+  kind           TEXT,                                  -- discovery | ads | funnel | classify
+  trigger        TEXT,                                  -- add-competitor | weekly-cron | manual-refresh | run
   sources        TEXT[],
   status         TEXT,                                  -- queued | running | partial | ok | failed
   started_at     TIMESTAMPTZ DEFAULT NOW(),
   finished_at    TIMESTAMPTZ,
   records_added  JSONB,                                 -- {ads: 11, lead_magnets: 2, ...}
+  cost_units     JSONB,                                 -- {firecrawl_credits: N, claude_calls: N, claude_tokens: N}
   errors         JSONB,
-  inngest_run_id TEXT
+  inngest_run_id TEXT                                   -- vestigial, kept so old rows still deserialize; unused going forward
 );
 
 CREATE INDEX IF NOT EXISTS scrape_jobs_competitor ON scrape_jobs(competitor_id);
+CREATE INDEX IF NOT EXISTS scrape_jobs_run        ON scrape_jobs(run_id);
 CREATE INDEX IF NOT EXISTS scrape_jobs_status     ON scrape_jobs(status);
 
 -- =============================================================

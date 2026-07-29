@@ -1,0 +1,8 @@
+{
+  "name": "biz-benchmark",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

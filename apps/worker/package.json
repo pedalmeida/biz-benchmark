@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "start": "node dist/index.js",
-    "build": "tsc",
+    "build": "npm run build -w @bb/shared && tsc",
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "@bb/shared": "*",
     "express": "^4.19.2",
     "firecrawl": "^4.24.2",
     "@neondatabase/serverless": "^0.10.4",

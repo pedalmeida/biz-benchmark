@@ -52,3 +52,6 @@ data/assets/**/*.mov
 *.pem
 *.key
 secrets/
+
+# workspace build outputs
+packages/*/dist
