@@ -1,3 +1,4 @@
+import { estimateCostCents } from "@bb/shared";
 import { expandKeywords } from "./pipeline/keyword-expansion.js";
 import {
   discoverCandidatesFirecrawl,
@@ -15,6 +16,43 @@ import {
   upsertAutoCompetitor,
   insertRunCompetitors,
 } from "./queries.js";
+
+class RunCostCapExceededError extends Error {}
+
+// Tracks call counts (not exact tokens — see cost-estimate.ts) across the
+// run and aborts BEFORE the next expensive stage once the cap is crossed,
+// rather than mid-stage. A run that goes over cost the moment it crosses
+// the cap, not one that's already 3 stages past it.
+class CostTracker {
+  private firecrawlCalls = 0;
+  private haikuCalls = 0;
+  private sonnetCalls = 0;
+  constructor(private readonly runId: string, private readonly capCents: number) {}
+
+  add(delta: { firecrawlCalls?: number; haikuCalls?: number; sonnetCalls?: number }) {
+    this.firecrawlCalls += delta.firecrawlCalls ?? 0;
+    this.haikuCalls += delta.haikuCalls ?? 0;
+    this.sonnetCalls += delta.sonnetCalls ?? 0;
+  }
+
+  costCents(): number {
+    return estimateCostCents({
+      firecrawlCalls: this.firecrawlCalls,
+      haikuCalls: this.haikuCalls,
+      sonnetCalls: this.sonnetCalls,
+    });
+  }
+
+  async checkpoint(): Promise<void> {
+    const cost = this.costCents();
+    await updateRun(this.runId, { cost_cents: Math.round(cost) });
+    if (cost > this.capCents) {
+      throw new RunCostCapExceededError(
+        `estimated cost ${cost.toFixed(1)}c exceeded cap ${this.capCents}c`
+      );
+    }
+  }
+}
 
 function slugifyCompetitorId(name: string): string {
   return name
@@ -39,9 +77,12 @@ export async function runDiscoveryPipeline(
   country: string
 ): Promise<void> {
   const maxCompetitors = parseInt(process.env.MAX_COMPETITORS_PER_RUN ?? "8", 10);
+  const costCap = parseInt(process.env.RUN_COST_CAP_CENTS ?? "200", 10);
+  const cost = new CostTracker(runId, costCap);
 
   // 3a: keyword expansion
   const { keywords, language } = await expandKeywords(nicheLabel, country);
+  cost.add({ haikuCalls: 1 });
   await updateRun(runId, { keywords, language, discovery_method: "firecrawl_keyword" });
 
   // 3b/3c: raw fetch + dedupe
@@ -49,6 +90,8 @@ export async function runDiscoveryPipeline(
     keywords,
     country
   );
+  cost.add({ firecrawlCalls: keywords.length });
+  await cost.checkpoint();
   if (keywordErrors.length > 0) {
     console.error(`run ${runId}: ${keywordErrors.length} keyword(s) failed`, keywordErrors);
   }
@@ -82,6 +125,8 @@ export async function runDiscoveryPipeline(
   // 3e: exactly one LLM call judges every survivor's relevance
   await updateRun(runId, { status: "classifying" });
   const verdicts = await judgeRelevance(survivors, nicheLabel, country);
+  cost.add({ sonnetCalls: 1 });
+  await cost.checkpoint();
   const verdictByKey = new Map(verdicts.map((v) => [v.nameKey, v]));
 
   const ranked: RankedCandidate[] = survivors.map((c) => {
@@ -187,14 +232,19 @@ export async function runDiscoveryPipeline(
     }
     await new Promise((r) => setTimeout(r, 2000));
   }
+  cost.add({ firecrawlCalls: competitorIds.length });
+  await cost.checkpoint();
 
   // 5b: classify hook_angle/traffic_temperature for the ads just scraped —
   // otherwise every run-discovered ad lands with both NULL, same gap the
   // original manual-add pipeline had.
   await updateRun(runId, { status: "classifying" });
+  let totalClassified = 0;
   for (const { id } of competitorIds) {
-    await classifyAds(id);
+    totalClassified += await classifyAds(id);
   }
+  cost.add({ sonnetCalls: Math.ceil(totalClassified / 40) });
+  await cost.checkpoint();
 
   // 6: crawl the top landing page(s) per competitor into funnel_steps/
   // offers/lead_magnets — the page most ads point to is the money page.
@@ -203,6 +253,8 @@ export async function runDiscoveryPipeline(
   for (const { id } of competitorIds) {
     await crawlFunnel(id, maxFunnelPages);
   }
+  cost.add({ firecrawlCalls: competitorIds.length * maxFunnelPages, sonnetCalls: competitorIds.length });
+  await cost.checkpoint();
 
   await updateRun(runId, { status: "ready", finished: true });
 }
