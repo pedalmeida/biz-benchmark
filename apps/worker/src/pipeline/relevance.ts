@@ -14,10 +14,24 @@ export type RelevanceVerdict = {
   reason: string;
 };
 
-function extractJson(text: string): unknown {
+function extractJson(text: string, truncated: boolean): unknown {
   const match = text.match(/```json\s*([\s\S]*?)```/);
   const raw = match ? match[1] : text;
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    // A truncated response (hit max_tokens before closing the fence) is a
+    // capacity problem, not a malformed-JSON problem — say so plainly
+    // instead of surfacing a cryptic "Unexpected token" to the run's error
+    // column. Found live: a saturated niche (many candidates, long ad
+    // bodies) pushed the relevance pass past its old 4000-token budget.
+    if (truncated) {
+      throw new Error(
+        `LLM response was truncated (hit max_tokens) before the JSON closed — reduce input size or raise max_tokens. Raw tail: ${raw.slice(-200)}`
+      );
+    }
+    throw err;
+  }
 }
 
 // Exactly ONE Claude call per run, regardless of survivor count (capped at
@@ -43,7 +57,11 @@ export async function judgeRelevance(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    // A saturated niche (real estate, dental, etc.) can send 60 candidates
+    // through here — found live that 4000 was too tight and truncated
+    // mid-array. Also asking for a short reason (not open-ended) below
+    // keeps output size predictable regardless of the cap.
+    max_tokens: 8000,
     messages: [
       {
         role: "user",
@@ -53,9 +71,9 @@ ${table}
 
 For EACH numbered row, decide if it's a genuine, direct competitor a business owner in "${nicheLabel}" (${country}) would actually want benchmarked — not just keyword-adjacent.
 
-Output ONLY a fenced JSON array, one object per row, in the same order, nothing else:
+Output ONLY a fenced JSON array, one object per row, in the same order, nothing else. Keep "reason" to under 12 words — this runs against many rows, brevity matters more than color here:
 \`\`\`json
-[{"name_key": "...", "is_relevant": true, "confidence": 0.9, "business_type": "dental clinic", "reason": "..."}, ...]
+[{"name_key": "...", "is_relevant": true, "confidence": 0.9, "business_type": "dental clinic", "reason": "short phrase"}, ...]
 \`\`\``,
       },
     ],
@@ -66,7 +84,8 @@ Output ONLY a fenced JSON array, one object per row, in the same order, nothing 
     .map((b) => b.text)
     .join("");
 
-  const parsed = extractJson(text) as Array<{
+  const truncated = response.stop_reason === "max_tokens";
+  const parsed = extractJson(text, truncated) as Array<{
     name_key: string;
     is_relevant: boolean;
     confidence: number;

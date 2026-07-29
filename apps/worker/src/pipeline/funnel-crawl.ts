@@ -101,9 +101,19 @@ type ExtractedLeadMagnet = {
   promise: string | null;
 };
 
-function extractJson(text: string): unknown {
+function extractJson(text: string, truncated: boolean): unknown {
   const match = text.match(/```json\s*([\s\S]*?)```/);
-  return JSON.parse(match ? match[1] : text);
+  const raw = match ? match[1] : text;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    if (truncated) {
+      throw new Error(
+        `LLM response was truncated (hit max_tokens) before the JSON closed — raise max_tokens. Raw tail: ${raw.slice(-200)}`
+      );
+    }
+    throw err;
+  }
 }
 
 async function extractFunnel(
@@ -120,7 +130,7 @@ async function extractFunnel(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 6000,
     messages: [
       {
         role: "user",
@@ -155,7 +165,7 @@ Omit offers/lead_magnets entirely (empty arrays) if the pages don't show any. Ne
     .map((b) => b.text)
     .join("");
 
-  const parsed = extractJson(text) as {
+  const parsed = extractJson(text, response.stop_reason === "max_tokens") as {
     steps?: ExtractedFunnelStep[];
     offers?: ExtractedOffer[];
     lead_magnets?: ExtractedLeadMagnet[];

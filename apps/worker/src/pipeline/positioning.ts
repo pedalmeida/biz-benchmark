@@ -5,9 +5,19 @@ import { getSql } from "../db.js";
 // positioning from raw funnel/offer/ad data is a real judgment call.
 const MODEL = "claude-sonnet-4-6";
 
-function extractJson(text: string): unknown {
+function extractJson(text: string, truncated: boolean): unknown {
   const match = text.match(/```json\s*([\s\S]*?)```/);
-  return JSON.parse(match ? match[1] : text);
+  const raw = match ? match[1] : text;
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    if (truncated) {
+      throw new Error(
+        `LLM response was truncated (hit max_tokens) before the JSON closed — raise max_tokens. Raw tail: ${raw.slice(-200)}`
+      );
+    }
+    throw err;
+  }
 }
 
 type ValueLadderRung = {
@@ -70,7 +80,7 @@ export async function generatePositioning(competitorId: string): Promise<boolean
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 2000,
+    max_tokens: 3000,
     messages: [
       {
         role: "user",
@@ -102,7 +112,7 @@ Output ONLY a fenced JSON object, nothing else:
     .map((b) => b.text)
     .join("");
 
-  const result = extractJson(text) as PositioningResult;
+  const result = extractJson(text, response.stop_reason === "max_tokens") as PositioningResult;
 
   const archetype = ARCHETYPES.includes(result.archetype ?? "") ? result.archetype : null;
   const funnelArchetype = FUNNEL_ARCHETYPES.includes(result.funnel_archetype ?? "")

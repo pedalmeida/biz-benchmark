@@ -15,10 +15,19 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-function extractJson(text: string): unknown {
+function extractJson(text: string, truncated: boolean): unknown {
   const match = text.match(/```json\s*([\s\S]*?)```/);
   const raw = match ? match[1] : text;
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    if (truncated) {
+      throw new Error(
+        `LLM response was truncated (hit max_tokens) before the JSON closed — reduce batch size or raise max_tokens. Raw tail: ${raw.slice(-200)}`
+      );
+    }
+    throw err;
+  }
 }
 
 async function classifyBatch(
@@ -34,7 +43,7 @@ async function classifyBatch(
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
   const response = await client.messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: 6000,
     messages: [
       {
         role: "user",
@@ -62,7 +71,7 @@ Output ONLY a fenced JSON array, one object per ad, same order, nothing else:
     .map((b) => b.text)
     .join("");
 
-  return extractJson(text) as {
+  return extractJson(text, response.stop_reason === "max_tokens") as {
     library_id: string;
     hook_angle: string | null;
     traffic_temperature: string | null;
