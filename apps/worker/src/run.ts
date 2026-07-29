@@ -9,6 +9,7 @@ import {
 import { judgeRelevance } from "./pipeline/relevance.js";
 import { classifyAds } from "./pipeline/classify.js";
 import { crawlFunnel } from "./pipeline/funnel-crawl.js";
+import { generatePositioning } from "./pipeline/positioning.js";
 import { scrapeAdLibrary } from "./scrape.js";
 import {
   updateRun,
@@ -254,6 +255,14 @@ export async function runDiscoveryPipeline(
     await crawlFunnel(id, maxFunnelPages);
   }
   cost.add({ firecrawlCalls: competitorIds.length * maxFunnelPages, sonnetCalls: competitorIds.length });
+  await cost.checkpoint();
+
+  // 6b: synthesize a value ladder + positioning per competitor from the
+  // funnel/offers/ads data just gathered — pure synthesis, no new scraping.
+  for (const { id } of competitorIds) {
+    await generatePositioning(id);
+  }
+  cost.add({ sonnetCalls: competitorIds.length });
   await cost.checkpoint();
 
   await updateRun(runId, { status: "ready", finished: true });
